@@ -5,7 +5,7 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>3D Spatial Cup Painter</title>
+    <title>Advanced Spatial AR Tracker</title>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
@@ -36,7 +36,7 @@
         height: 100%;
         object-fit: cover;
         z-index: 1;
-        transition: all 0.5s ease;
+        transition: opacity 0.5s;
       }
       canvas {
         position: absolute;
@@ -46,7 +46,7 @@
         pointer-events: none;
       }
 
-      /* Home Page / Overlay */
+      /* Homepage Overlay */
       #overlay {
         position: absolute;
         inset: 0;
@@ -58,8 +58,42 @@
         justify-content: center;
         color: white;
         text-align: center;
-        transition: opacity 0.8s;
-        padding: 20px;
+        padding: 30px;
+      }
+
+      /* Top Selector */
+      .top-nav {
+        position: absolute;
+        top: 30px;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        z-index: 20;
+      }
+      .selector {
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 20px;
+        padding: 5px;
+        display: flex;
+        gap: 5px;
+      }
+      .sel-btn {
+        background: none;
+        border: none;
+        color: white;
+        padding: 8px 15px;
+        border-radius: 15px;
+        font-size: 10px;
+        cursor: pointer;
+        opacity: 0.5;
+        transition: 0.3s;
+      }
+      .sel-btn.active {
+        background: var(--accent);
+        color: black;
+        opacity: 1;
       }
 
       /* Bottom Controls */
@@ -78,7 +112,6 @@
         gap: 15px;
         align-items: center;
       }
-
       .btn {
         width: 55px;
         height: 55px;
@@ -91,11 +124,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 18px;
         transition: 0.3s;
-      }
-      .btn:active {
-        transform: scale(0.9);
       }
       .btn-main {
         width: auto;
@@ -105,65 +134,61 @@
         font-size: 12px;
         letter-spacing: 2px;
       }
-
-      /* ضبط فعال */
       .recording {
         border-color: #ff0055;
         color: #ff0055;
-        box-shadow: 0 0 15px rgba(255, 0, 85, 0.3);
       }
-
-      /* Export State Styles */
       .export-active video {
         opacity: 0.05;
         filter: grayscale(1) brightness(0.5);
       }
-
-      #status {
-        color: white;
-        font-size: 10px;
-        letter-spacing: 3px;
-        text-transform: uppercase;
-        opacity: 0.5;
-        height: 15px;
-      }
     </style>
   </head>
   <body>
-    <div class="app-container" id="main-app">
+    <div class="app-container">
       <div id="overlay">
         <h1 style="font-weight: 100; letter-spacing: 12px">SPATIAL AR</h1>
         <p
-          dir="rtl"
           style="
             color: #888;
             font-size: 14px;
             max-width: 300px;
             line-height: 1.8;
-            font-family: sans-serif;
           ">
-          لطفا به دوربین دسترسی بدهید و سعی کنید با ترک کردن مسیر حرکت لیوان
-          نقاشی بکشید!
+          Please grant camera and motion access. Track objects to paint in 3D
+          space!
         </p>
         <button
           class="btn btn-main"
-          onclick="startExperience()"
+          onclick="requestPermissions()"
           style="margin-top: 30px; border-color: var(--accent)">
           INITIALIZE
         </button>
       </div>
 
+      <div class="top-nav">
+        <div class="selector">
+          <button class="sel-btn active" onclick="setTarget('cup', this)">
+            CUP
+          </button>
+          <button class="sel-btn" onclick="setTarget('person', this)">
+            PERSON
+          </button>
+          <button class="sel-btn" onclick="setTarget('car', this)">CAR</button>
+          <button class="sel-btn" onclick="setTarget('bicycle', this)">
+            BIKE
+          </button>
+        </div>
+      </div>
+
       <div class="ui-panel">
-        <div id="status"></div>
         <div class="btn-group">
           <button class="btn" onclick="resetPaths()">
             <i class="fas fa-undo"></i>
           </button>
-
           <button id="trackBtn" class="btn" onclick="toggleTracking()">
             <i class="fas fa-play"></i>
           </button>
-
           <button id="exportBtn" class="btn" onclick="toggleExport()">
             <i class="far fa-circle"></i>
           </button>
@@ -178,180 +203,149 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"></script>
 
     <script type="module">
-      import {
-        ObjectDetector,
-        FilesetResolver,
-      } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js";
+      import { ObjectDetector, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js";
 
       let scene, camera, renderer, detector;
-      let video = document.getElementById("webcam");
-      let canvas2d = document.getElementById("2d-canvas");
-      let ctx2d = canvas2d.getContext("2d");
+      let video = document.getElementById('webcam');
+      let canvas2d = document.getElementById('2d-canvas');
+      let ctx2d = canvas2d.getContext('2d');
 
       let isRecording = false;
-      let isExport = false;
       let objectPaths = {};
-      const pathColors = [
-        0x00ffcc, 0xff0055, 0x0077ff, 0xffaa00, 0xcc00ff, 0x00ff00,
-      ];
+      let currentTarget = 'cup';
+      const pathColors = [0x00ffcc, 0xff0055, 0x0077ff, 0xffaa00, 0xcc00ff, 0x00ff00];
 
-      window.startExperience = async () => {
-        document.getElementById("overlay").style.opacity = "0";
-        setTimeout(
-          () => (document.getElementById("overlay").style.display = "none"),
-          800,
-        );
-
-        initThree();
-        await initDetector();
-        setupCamera();
+      // ۱. اجازه دسترسی به سنسورهای آیفون (Motion)
+      window.requestPermissions = async () => {
+          if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+              const permission = await DeviceOrientationEvent.requestPermission();
+              if (permission === 'granted') {
+                  window.addEventListener('deviceorientation', handleMotion);
+              }
+          } else {
+              window.addEventListener('deviceorientation', handleMotion);
+          }
+          startApp();
       };
 
-      function initThree() {
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(
-          75,
-          window.innerWidth / window.innerHeight,
-          0.1,
-          1000,
-        );
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        document
-          .querySelector(".app-container")
-          .appendChild(renderer.domElement);
-        renderer.domElement.style.position = "absolute";
-        renderer.domElement.style.top = "0";
-        renderer.domElement.style.zIndex = "3";
-
-        camera.position.set(0, 0, 0); // شروع از مرکز
+      function handleMotion(event) {
+          if (!camera) return;
+          // هماهنگ کردن چرخش دوربین مجازی با چرخش واقعی گوشی
+          const alpha = event.alpha ? THREE.MathUtils.degToRad(event.alpha) : 0;
+          const beta = event.beta ? THREE.MathUtils.degToRad(event.beta) : 0;
+          const gamma = event.gamma ? THREE.MathUtils.degToRad(event.gamma) : 0;
+          camera.rotation.set(beta, alpha, -gamma, 'YXZ');
       }
 
-      async function initDetector() {
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm",
-        );
-        detector = await ObjectDetector.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite`,
-            delegate: "GPU",
-          },
-          scoreThreshold: 0.35,
-          runningMode: "VIDEO",
-        });
+      async function startApp() {
+          document.getElementById('overlay').style.opacity = '0';
+          setTimeout(() => document.getElementById('overlay').style.display = 'none', 800);
+          initThree();
+          await initAI();
+          setupCamera();
+      }
+
+      function initThree() {
+          scene = new THREE.Scene();
+          camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+          renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+          renderer.setSize(window.innerWidth, window.innerHeight);
+          document.querySelector('.app-container').appendChild(renderer.domElement);
+          renderer.domElement.style.position = 'absolute';
+          renderer.domElement.style.top = '0';
+          renderer.domElement.style.zIndex = '3';
+      }
+
+      async function initAI() {
+          const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm");
+          detector = await ObjectDetector.createFromOptions(vision, {
+              baseOptions: {
+                  modelAssetPath: `https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite`,
+                  delegate: "GPU"
+              },
+              scoreThreshold: 0.35,
+              runningMode: "VIDEO"
+          });
       }
 
       async function setupCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-        });
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          canvas2d.width = video.videoWidth;
-          canvas2d.height = video.videoHeight;
-          renderLoop();
-        };
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+          video.srcObject = stream;
+          video.onloadedmetadata = () => {
+              canvas2d.width = video.videoWidth;
+              canvas2d.height = video.videoHeight;
+              renderLoop();
+          };
       }
 
+      window.setTarget = (type, btn) => {
+          currentTarget = type;
+          document.querySelectorAll('.sel-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          resetPaths();
+      };
+
       window.toggleTracking = () => {
-        isRecording = !isRecording;
-        const btn = document.getElementById("trackBtn");
-        btn.innerHTML = isRecording
-          ? '<i class="fas fa-pause"></i>'
-          : '<i class="fas fa-play"></i>';
-        btn.classList.toggle("recording", isRecording);
+          isRecording = !isRecording;
+          const btn = document.getElementById('trackBtn');
+          btn.innerHTML = isRecording ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+          btn.classList.toggle('recording', isRecording);
       };
 
       window.resetPaths = () => {
-        Object.values(objectPaths).forEach((p) => scene.remove(p.line));
-        objectPaths = {};
+          Object.values(objectPaths).forEach(p => scene.remove(p.line));
+          objectPaths = {};
       };
 
       window.toggleExport = () => {
-        isExport = !isExport;
-        document.body.classList.toggle("export-active");
-        const btn = document.getElementById("exportBtn");
-        btn.innerHTML = isExport
-          ? '<i class="fas fa-circle"></i>'
-          : '<i class="far fa-circle"></i>';
+          document.body.classList.toggle('export-active');
+          document.getElementById('exportBtn').innerHTML = document.body.classList.contains('export-active') ? '<i class="fas fa-circle"></i>' : '<i class="far fa-circle"></i>';
       };
 
       function renderLoop() {
-        ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+          ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+          if (detector && video.readyState >= 2) {
+              const results = detector.detectForVideo(video, performance.now());
+              results.detections.forEach((det, i) => {
+                  if (det.categories[0].categoryName === currentTarget) {
+                      const { originX, originY, width, height } = det.boundingBox;
+                      ctx2d.strokeStyle = var(--accent);
+                      ctx2d.strokeRect(originX, originY, width, height);
 
-        if (detector && video.readyState >= 2) {
-          const results = detector.detectForVideo(video, performance.now());
-          handleDetections(results);
-        }
-
-        renderer.render(scene, camera);
-        requestAnimationFrame(renderLoop);
-      }
-
-      function handleDetections(results) {
-        results.detections.forEach((det, i) => {
-          if (det.categories[0].categoryName === "cup") {
-            const { originX, originY, width, height } = det.boundingBox;
-
-            // رسم کادر نازک
-            ctx2d.strokeStyle = "rgba(255, 255, 255, 0.3)";
-            ctx2d.setLineDash([5, 5]);
-            ctx2d.strokeRect(originX, originY, width, height);
-            ctx2d.setLineDash([]);
-
-            if (isRecording) {
-              // حل مشکل تخت بودن: تبدیل مختصات به فضای سه بعدی با عمق داینامیک
-              // X و Y را از مرکز صفحه محاسبه می‌کنیم (-1 تا 1)
-              const nx = ((originX + width / 2) / video.videoWidth) * 2 - 1;
-              const ny = -(
-                ((originY + height / 2) / video.videoHeight) * 2 -
-                1
-              );
-
-              // تخمین Z: هر چه لیوان کوچک‌تر باشد، یعنی دورتر است.
-              // از نسبت عرض لیوان به عرض تصویر استفاده می‌کنیم.
-              const nz = -((video.videoWidth / width) * 0.5);
-
-              // تبدیل نقاط نرمالایز شده به مختصات جهانی Three.js
-              const vector = new THREE.Vector3(nx, ny, 0.5);
-              vector.unproject(camera);
-              const dir = vector.sub(camera.position).normalize();
-              const distance = Math.abs(nz);
-              const pos = camera.position
-                .clone()
-                .add(dir.multiplyScalar(distance));
-
-              update3DLine(i, pos.x, pos.y, pos.z);
-            }
+                      if (isRecording) {
+                          // منطق عمق: استفاده از اندازه آبجکت برای تعیین فاصله در فضا
+                          const zDist = Math.max(2, 10 - (width / video.videoWidth) * 15);
+                          const vector = new THREE.Vector3(
+                              ((originX + width/2) / video.videoWidth) * 2 - 1,
+                              -((originY + height/2) / video.videoHeight) * 2 + 1,
+                              0.5
+                          );
+                          vector.unproject(camera);
+                          const dir = vector.sub(camera.position).normalize();
+                          const pos = camera.position.clone().add(dir.multiplyScalar(zDist));
+                          update3DLine(i, pos.x, pos.y, pos.z);
+                      }
+                  }
+              });
           }
-        });
+          renderer.render(scene, camera);
+          requestAnimationFrame(renderLoop);
       }
 
       function update3DLine(id, x, y, z) {
-        if (!objectPaths[id]) {
-          const color = pathColors[id % pathColors.length];
-          const geometry = new THREE.BufferGeometry();
-          const material = new THREE.LineBasicMaterial({
-            color: color,
-            linewidth: 3,
-          });
-          const line = new THREE.Line(geometry, material);
-          objectPaths[id] = { line, points: [], color };
-          scene.add(line);
-        }
-
-        const path = objectPaths[id];
-        path.points.push(new THREE.Vector3(x, y, z));
-        if (path.points.length > 200) path.points.shift();
-        path.line.geometry.setFromPoints(path.points);
+          if (!objectPaths[id]) {
+              const color = pathColors[id % pathColors.length];
+              const geometry = new THREE.BufferGeometry();
+              const material = new THREE.LineBasicMaterial({ color: color, linewidth: 4 });
+              const line = new THREE.Line(geometry, material);
+              objectPaths[id] = { line, points: [], color };
+              scene.add(line);
+          }
+          const path = objectPaths[id];
+          path.points.push(new THREE.Vector3(x, y, z));
+          if (path.points.length > 300) path.points.shift();
+          path.line.geometry.setFromPoints(path.points);
       }
-
-      window.addEventListener("resize", () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
     </script>
   </body>
 </html>
