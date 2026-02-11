@@ -5,13 +5,14 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>AR Spatial Painter</title>
+    <title>3D Spatial AI Painter</title>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <style>
       :root {
         --accent: #00ffcc;
+        --bg: #000;
       }
       body,
       html {
@@ -19,15 +20,15 @@
         padding: 0;
         width: 100%;
         height: 100%;
-        background: #000;
+        background: var(--bg);
         overflow: hidden;
-        font-family: sans-serif;
+        font-family: -apple-system, sans-serif;
       }
-      .viewport {
+
+      .app-container {
         position: relative;
         width: 100vw;
         height: 100vh;
-        overflow: hidden;
       }
       video {
         position: absolute;
@@ -35,21 +36,21 @@
         height: 100%;
         object-fit: cover;
         z-index: 1;
+        transition: all 0.5s ease;
       }
       canvas {
         position: absolute;
-        top: 0;
-        left: 0;
         width: 100%;
         height: 100%;
-        z-index: 10;
+        z-index: 2;
         pointer-events: none;
       }
 
+      /* Home Page / Overlay */
       #overlay {
         position: absolute;
         inset: 0;
-        background: #000;
+        background: var(--bg);
         z-index: 100;
         display: flex;
         flex-direction: column;
@@ -57,211 +58,203 @@
         justify-content: center;
         color: white;
         text-align: center;
+        transition: opacity 0.8s;
         padding: 20px;
       }
 
-      .top-bar {
+      /* Top Selector */
+      .top-nav {
         position: absolute;
-        top: 20px;
+        top: 25px;
         width: 100%;
-        display: none;
-        justify-content: center;
-        z-index: 30;
-      }
-      .selector {
-        background: rgba(0, 0, 0, 0.7);
-        border-radius: 25px;
-        padding: 5px;
         display: flex;
+        justify-content: center;
+        z-index: 10;
+        display: none;
+      }
+      .selector-box {
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(15px);
         border: 1px solid rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(10px);
+        border-radius: 30px;
+        padding: 4px;
+        display: flex;
+        gap: 5px;
       }
       .sel-btn {
         background: none;
         border: none;
         color: white;
-        padding: 8px 12px;
+        padding: 8px 16px;
         border-radius: 20px;
-        font-size: 10px;
+        font-size: 11px;
         cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 1px;
         opacity: 0.5;
+        transition: 0.3s;
       }
       .sel-btn.active {
         background: var(--accent);
-        color: #000;
+        color: black;
         opacity: 1;
+        font-weight: bold;
       }
 
-      .controls {
+      /* Bottom Controls */
+      .ui-panel {
         position: absolute;
         bottom: 8%;
         width: 100%;
-        display: none;
-        justify-content: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
         gap: 20px;
-        z-index: 30;
+        z-index: 10;
       }
-      .circle-btn {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        border: 1px solid #fff;
+      .btn-group {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+      }
+
+      .btn {
+        width: 55px;
+        height: 55px;
         background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.4);
         color: white;
+        border-radius: 50%;
+        cursor: pointer;
+        backdrop-filter: blur(15px);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 20px;
-        cursor: pointer;
+        font-size: 18px;
+        transition: 0.3s;
       }
-      .rec-active {
-        color: #ff0055;
+      .btn:active {
+        transform: scale(0.9);
+      }
+      .btn-main {
+        width: auto;
+        height: auto;
+        padding: 12px 30px;
+        border-radius: 40px;
+        font-size: 12px;
+        letter-spacing: 2px;
+      }
+
+      .recording {
         border-color: #ff0055;
+        color: #ff0055;
         box-shadow: 0 0 15px rgba(255, 0, 85, 0.3);
       }
+
       .export-active video {
-        opacity: 0.1;
+        opacity: 0.05;
         filter: grayscale(1) brightness(0.5);
+      }
+      #status {
+        color: white;
+        font-size: 10px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        opacity: 0.5;
+        height: 15px;
       }
     </style>
   </head>
   <body>
-    <div class="viewport">
+    <div class="app-container" id="main-app">
       <div id="overlay">
-        <h1 style="font-weight: 100; letter-spacing: 5px">SPATIAL AR</h1>
+        <h1 style="font-weight: 100; letter-spacing: 12px">SPATIAL AR</h1>
         <p
           style="
-            color: #aaa;
+            color: #888;
             font-size: 14px;
-            max-width: 280px;
-            margin-bottom: 30px;
+            max-width: 300px;
+            line-height: 1.8;
+            font-family: sans-serif;
           ">
-          Please grant camera access. Point at objects to start painting your
-          path in 3D!
+          Please grant camera access and start painting in 3D space by tracking
+          your chosen object!
         </p>
         <button
-          id="start-btn"
-          onclick="startProject()"
-          style="
-            padding: 15px 50px;
-            border-radius: 30px;
-            border: 1px solid var(--accent);
-            background: none;
-            color: var(--accent);
-            font-size: 16px;
-            cursor: pointer;
-          ">
-          START
+          class="btn btn-main"
+          onclick="startExperience()"
+          style="margin-top: 30px; border-color: var(--accent)">
+          INITIALIZE ENGINE
         </button>
       </div>
 
-      <div class="top-bar" id="topUI">
-        <div class="selector">
-          <button class="sel-btn active" onclick="changeTarget('cup', this)">
-            CUP
+      <div class="top-nav" id="top-nav">
+        <div class="selector-box">
+          <button class="sel-btn active" onclick="setTarget('cup', this)">
+            Cup
           </button>
-          <button class="sel-btn" onclick="changeTarget('person', this)">
-            PERSON
+          <button class="sel-btn" onclick="setTarget('person', this)">
+            Person
           </button>
-          <button class="sel-btn" onclick="changeTarget('car', this)">
-            CAR
+          <button class="sel-btn" onclick="setTarget('car', this)">Car</button>
+          <button class="sel-btn" onclick="setTarget('bicycle', this)">
+            Bike
           </button>
-          <button class="sel-btn" onclick="changeTarget('bicycle', this)">
-            BIKE
+        </div>
+      </div>
+
+      <div class="ui-panel">
+        <div id="status"></div>
+        <div class="btn-group">
+          <button class="btn" onclick="resetPaths()">
+            <i class="fas fa-undo"></i>
+          </button>
+          <button id="trackBtn" class="btn" onclick="toggleTracking()">
+            <i class="fas fa-play"></i>
+          </button>
+          <button id="exportBtn" class="btn" onclick="toggleExport()">
+            <i class="far fa-circle"></i>
           </button>
         </div>
       </div>
 
       <video id="webcam" autoplay playsinline></video>
-      <canvas id="twod-canvas"></canvas>
-
-      <div class="controls" id="botUI">
-        <button class="circle-btn" onclick="clearLines()">
-          <i class="fas fa-undo"></i>
-        </button>
-        <button id="recBtn" class="circle-btn" onclick="toggleRec()">
-          <i class="fas fa-play"></i>
-        </button>
-        <button id="expBtn" class="circle-btn" onclick="toggleExp()">
-          <i class="far fa-circle"></i>
-        </button>
-      </div>
+      <canvas id="2d-canvas"></canvas>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"></script>
 
-    <script>
-      let objectDetector;
+    <script type="module">
+      import {
+        ObjectDetector,
+        FilesetResolver,
+      } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js";
+
+      let scene, camera, renderer, detector;
       let video = document.getElementById("webcam");
-      let canvas2d = document.getElementById("twod-canvas");
+      let canvas2d = document.getElementById("2d-canvas");
       let ctx2d = canvas2d.getContext("2d");
-      let scene, camera, renderer;
+
       let isRecording = false;
+      let isExport = false;
       let currentTarget = "cup";
       let objectPaths = {};
-      const colors = [
+      const pathColors = [
         0x00ffcc, 0xff0055, 0x0077ff, 0xffaa00, 0xcc00ff, 0x00ff00,
       ];
 
-      async function startProject() {
-        const btn = document.getElementById("start-btn");
-        btn.innerText = "Initializing AI...";
-        btn.disabled = true;
+      window.startExperience = async () => {
+        document.getElementById("overlay").style.opacity = "0";
+        setTimeout(() => {
+          document.getElementById("overlay").style.display = "none";
+          document.getElementById("top-nav").style.display = "flex";
+        }, 800);
 
-        try {
-          // لود کردن فایل‌های اصلی MediaPipe
-          const vision = await createFilesetResolver();
-          objectDetector = await ObjectDetector.createFromOptions(vision, {
-            baseOptions: {
-              modelAssetPath:
-                "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite",
-              delegate: "GPU",
-            },
-            scoreThreshold: 0.3,
-            runningMode: "VIDEO",
-          });
-
-          // درخواست دوربین
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: "environment",
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
-          });
-          video.srcObject = stream;
-
-          // آماده‌سازی گرافیک
-          initThree();
-
-          video.onloadedmetadata = () => {
-            canvas2d.width = video.videoWidth;
-            canvas2d.height = video.videoHeight;
-
-            document.getElementById("overlay").style.display = "none";
-            document.getElementById("topUI").style.display = "flex";
-            document.getElementById("botUI").style.display = "flex";
-
-            animate();
-          };
-        } catch (err) {
-          console.error(err);
-          alert(
-            "AI failed to load. Please check your internet and HTTPS connection.",
-          );
-          btn.disabled = false;
-          btn.innerText = "START";
-        }
-      }
-
-      // توابع کمکی MediaPipe برای زمانی که به صورت ماژولار نیست
-      async function createFilesetResolver() {
-        return await bouquet.FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm",
-        );
-      }
-      const { ObjectDetector, FilesetResolver } = bouquet;
+        initThree();
+        await initDetector();
+        setupCamera();
+      };
 
       function initThree() {
         scene = new THREE.Scene();
@@ -273,104 +266,144 @@
         );
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document
+          .querySelector(".app-container")
+          .appendChild(renderer.domElement);
         renderer.domElement.style.position = "absolute";
         renderer.domElement.style.top = "0";
-        renderer.domElement.style.zIndex = "20"; // لایه ۳ بعدی بالاتر از ویدیو
-        renderer.domElement.style.pointerEvents = "none";
-        camera.position.z = 10;
+        renderer.domElement.style.zIndex = "3";
+        camera.position.set(0, 0, 0);
       }
 
-      function changeTarget(target, btn) {
-        currentTarget = target;
+      async function initDetector() {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm",
+        );
+        detector = await ObjectDetector.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite`,
+            delegate: "GPU",
+          },
+          scoreThreshold: 0.35,
+          runningMode: "VIDEO",
+        });
+      }
+
+      async function setupCamera() {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          canvas2d.width = video.videoWidth;
+          canvas2d.height = video.videoHeight;
+          renderLoop();
+        };
+      }
+
+      window.setTarget = (label, btn) => {
+        currentTarget = label;
         document
           .querySelectorAll(".sel-btn")
           .forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
-        clearLines();
-      }
+        resetPaths(); // ریست کردن خطوط هنگام تغییر سوژه برای جلوگیری از قاطی شدن
+      };
 
-      function toggleRec() {
+      window.toggleTracking = () => {
         isRecording = !isRecording;
-        document.getElementById("recBtn").classList.toggle("rec-active");
-        document.getElementById("recBtn").innerHTML = isRecording
+        const btn = document.getElementById("trackBtn");
+        btn.innerHTML = isRecording
           ? '<i class="fas fa-pause"></i>'
           : '<i class="fas fa-play"></i>';
-      }
+        btn.classList.toggle("recording", isRecording);
+      };
 
-      function clearLines() {
+      window.resetPaths = () => {
         Object.values(objectPaths).forEach((p) => scene.remove(p.line));
         objectPaths = {};
-      }
+      };
 
-      function toggleExp() {
+      window.toggleExport = () => {
+        isExport = !isExport;
         document.body.classList.toggle("export-active");
-        const icon = document.body.classList.contains("export-active")
-          ? "fas fa-circle"
-          : "far fa-circle";
-        document.getElementById("expBtn").innerHTML = `<i class="${icon}"></i>`;
-      }
+        const btn = document.getElementById("exportBtn");
+        btn.innerHTML = isExport
+          ? '<i class="fas fa-circle"></i>'
+          : '<i class="far fa-circle"></i>';
+      };
 
-      function animate() {
+      function renderLoop() {
         ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
 
-        if (objectDetector && video.readyState >= 2) {
-          const results = objectDetector.detectForVideo(
-            video,
-            performance.now(),
-          );
-
-          results.detections.forEach((det, i) => {
-            if (det.categories[0].categoryName === currentTarget) {
-              const { originX, originY, width, height } = det.boundingBox;
-
-              // نمایش کادر دور سوژه (لایه ۲ بعدی)
-              ctx2d.strokeStyle = "#00ffcc";
-              ctx2d.lineWidth = 3;
-              ctx2d.strokeRect(originX, originY, width, height);
-
-              if (isRecording) {
-                // تبدیل به فضای ۳ بعدی
-                const x = ((originX + width / 2) / video.videoWidth) * 20 - 10;
-                const y =
-                  -((originY + height / 2) / video.videoHeight) * 15 + 7.5;
-                const z = -(width / video.videoWidth) * 15 + 5;
-
-                updatePath(i, x, y, z);
-              }
-            }
-          });
+        if (detector && video.readyState >= 2) {
+          const results = detector.detectForVideo(video, performance.now());
+          handleDetections(results);
         }
 
         renderer.render(scene, camera);
-        requestAnimationFrame(animate);
+        requestAnimationFrame(renderLoop);
       }
 
-      function updatePath(id, x, y, z) {
+      function handleDetections(results) {
+        results.detections.forEach((det, i) => {
+          // چک کردن اینکه آیا شیء شناسایی شده با انتخاب کاربر یکی است یا خیر
+          if (det.categories[0].categoryName === currentTarget) {
+            const { originX, originY, width, height } = det.boundingBox;
+
+            // رسم کادر راهنما
+            ctx2d.strokeStyle = "rgba(0, 255, 204, 0.5)";
+            ctx2d.lineWidth = 2;
+            ctx2d.strokeRect(originX, originY, width, height);
+
+            if (isRecording) {
+              const nx = ((originX + width / 2) / video.videoWidth) * 2 - 1;
+              const ny = -(
+                ((originY + height / 2) / video.videoHeight) * 2 -
+                1
+              );
+
+              // تخمین عمق بر اساس اندازه شیء در تصویر
+              const nz = -((video.videoWidth / width) * 0.5);
+
+              const vector = new THREE.Vector3(nx, ny, 0.5);
+              vector.unproject(camera);
+              const dir = vector.sub(camera.position).normalize();
+              const distance = Math.abs(nz);
+              const pos = camera.position
+                .clone()
+                .add(dir.multiplyScalar(distance));
+
+              update3DLine(i, pos.x, pos.y, pos.z);
+            }
+          }
+        });
+      }
+
+      function update3DLine(id, x, y, z) {
         if (!objectPaths[id]) {
-          const color = colors[id % colors.length];
+          const color = pathColors[id % pathColors.length];
           const geometry = new THREE.BufferGeometry();
           const material = new THREE.LineBasicMaterial({
             color: color,
-            linewidth: 5,
+            linewidth: 4,
           });
           const line = new THREE.Line(geometry, material);
-          objectPaths[id] = { line, points: [] };
+          objectPaths[id] = { line, points: [], color };
           scene.add(line);
         }
-        const p = objectPaths[id];
-        p.points.push(new THREE.Vector3(x, y, z));
-        if (p.points.length > 250) p.points.shift();
-        p.line.geometry.setFromPoints(p.points);
+
+        const path = objectPaths[id];
+        path.points.push(new THREE.Vector3(x, y, z));
+        if (path.points.length > 250) path.points.shift();
+        path.line.geometry.setFromPoints(path.points);
       }
 
       window.addEventListener("resize", () => {
-        if (camera) {
-          camera.aspect = window.innerWidth / window.innerHeight;
-          camera.updateProjectionMatrix();
-          renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
       });
     </script>
   </body>
