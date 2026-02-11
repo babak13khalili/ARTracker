@@ -5,7 +5,10 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>3D Spatial Cup Tracker</title>
+    <title>3D Spatial Cup Painter</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <style>
       :root {
         --accent: #00ffcc;
@@ -43,7 +46,7 @@
         pointer-events: none;
       }
 
-      /* Overlay */
+      /* Home Page / Overlay */
       #overlay {
         position: absolute;
         inset: 0;
@@ -56,9 +59,10 @@
         color: white;
         text-align: center;
         transition: opacity 0.8s;
+        padding: 20px;
       }
 
-      /* Controls */
+      /* Bottom Controls */
       .ui-panel {
         position: absolute;
         bottom: 8%;
@@ -72,23 +76,47 @@
       .btn-group {
         display: flex;
         gap: 15px;
+        align-items: center;
       }
+
       .btn {
-        padding: 12px 28px;
+        width: 55px;
+        height: 55px;
         background: rgba(0, 0, 0, 0.5);
         border: 1px solid rgba(255, 255, 255, 0.4);
         color: white;
-        border-radius: 40px;
+        border-radius: 50%;
         cursor: pointer;
         backdrop-filter: blur(15px);
-        font-size: 11px;
-        letter-spacing: 2px;
-        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
         transition: 0.3s;
       }
-      .btn-rec.active {
-        background: #ff0055;
+      .btn:active {
+        transform: scale(0.9);
+      }
+      .btn-main {
+        width: auto;
+        height: auto;
+        padding: 12px 30px;
+        border-radius: 40px;
+        font-size: 12px;
+        letter-spacing: 2px;
+      }
+
+      /* ضبط فعال */
+      .recording {
         border-color: #ff0055;
+        color: #ff0055;
+        box-shadow: 0 0 15px rgba(255, 0, 85, 0.3);
+      }
+
+      /* Export State Styles */
+      .export-active video {
+        opacity: 0.05;
+        filter: grayscale(1) brightness(0.5);
       }
 
       #status {
@@ -97,12 +125,7 @@
         letter-spacing: 3px;
         text-transform: uppercase;
         opacity: 0.5;
-      }
-
-      /* Export State */
-      .export-active video {
-        opacity: 0.05;
-        filter: grayscale(1) contrast(1.5);
+        height: 15px;
       }
     </style>
   </head>
@@ -111,30 +134,39 @@
       <div id="overlay">
         <h1 style="font-weight: 100; letter-spacing: 12px">SPATIAL AR</h1>
         <p
+          dir="rtl"
           style="
-            color: #555;
-            font-size: 12px;
-            max-width: 250px;
+            color: #888;
+            font-size: 14px;
+            max-width: 300px;
             line-height: 1.8;
+            font-family: sans-serif;
           ">
-          Point at cups to generate 3D spatial paths. Each object is assigned a
-          unique color.
+          لطفا به دوربین دسترسی بدهید و سعی کنید با ترک کردن مسیر حرکت لیوان
+          نقاشی بکشید!
         </p>
         <button
-          class="btn"
+          class="btn btn-main"
           onclick="startExperience()"
           style="margin-top: 30px; border-color: var(--accent)">
-          Initialize
+          INITIALIZE
         </button>
       </div>
 
       <div class="ui-panel">
-        <div id="status">System Standby</div>
+        <div id="status"></div>
         <div class="btn-group">
-          <button id="recBtn" class="btn btn-rec" onclick="toggleTracking()">
-            Rec Off
+          <button class="btn" onclick="resetPaths()">
+            <i class="fas fa-undo"></i>
           </button>
-          <button class="btn" onclick="toggleExport()">Export View</button>
+
+          <button id="trackBtn" class="btn" onclick="toggleTracking()">
+            <i class="fas fa-play"></i>
+          </button>
+
+          <button id="exportBtn" class="btn" onclick="toggleExport()">
+            <i class="far fa-circle"></i>
+          </button>
         </div>
       </div>
 
@@ -156,7 +188,8 @@
       let canvas2d = document.getElementById("2d-canvas");
       let ctx2d = canvas2d.getContext("2d");
 
-      let isTracking = false;
+      let isRecording = false;
+      let isExport = false;
       let objectPaths = {};
       const pathColors = [
         0x00ffcc, 0xff0055, 0x0077ff, 0xffaa00, 0xcc00ff, 0x00ff00,
@@ -184,7 +217,7 @@
         );
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         document
           .querySelector(".app-container")
           .appendChild(renderer.domElement);
@@ -192,7 +225,7 @@
         renderer.domElement.style.top = "0";
         renderer.domElement.style.zIndex = "3";
 
-        camera.position.z = 8;
+        camera.position.set(0, 0, 0); // شروع از مرکز
       }
 
       async function initDetector() {
@@ -207,7 +240,6 @@
           scoreThreshold: 0.35,
           runningMode: "VIDEO",
         });
-        document.getElementById("status").innerText = "AI Engine Active";
       }
 
       async function setupCamera() {
@@ -223,19 +255,26 @@
       }
 
       window.toggleTracking = () => {
-        isTracking = !isTracking;
-        const btn = document.getElementById("recBtn");
-        btn.classList.toggle("active");
-        btn.innerText = isTracking ? "Rec On" : "Rec Off";
-        if (!isTracking) {
-          // Clear scene for new recording session
-          Object.values(objectPaths).forEach((p) => scene.remove(p.line));
-          objectPaths = {};
-        }
+        isRecording = !isRecording;
+        const btn = document.getElementById("trackBtn");
+        btn.innerHTML = isRecording
+          ? '<i class="fas fa-pause"></i>'
+          : '<i class="fas fa-play"></i>';
+        btn.classList.toggle("recording", isRecording);
+      };
+
+      window.resetPaths = () => {
+        Object.values(objectPaths).forEach((p) => scene.remove(p.line));
+        objectPaths = {};
       };
 
       window.toggleExport = () => {
+        isExport = !isExport;
         document.body.classList.toggle("export-active");
+        const btn = document.getElementById("exportBtn");
+        btn.innerHTML = isExport
+          ? '<i class="fas fa-circle"></i>'
+          : '<i class="far fa-circle"></i>';
       };
 
       function renderLoop() {
@@ -255,19 +294,35 @@
           if (det.categories[0].categoryName === "cup") {
             const { originX, originY, width, height } = det.boundingBox;
 
-            // 1. Draw Bounding Box (2D Overlay)
-            ctx2d.strokeStyle = "rgba(255, 255, 255, 0.5)";
-            ctx2d.lineWidth = 2;
+            // رسم کادر نازک
+            ctx2d.strokeStyle = "rgba(255, 255, 255, 0.3)";
+            ctx2d.setLineDash([5, 5]);
             ctx2d.strokeRect(originX, originY, width, height);
+            ctx2d.setLineDash([]);
 
-            // 2. Process 3D Path if recording
-            if (isTracking) {
-              const posX = ((originX + width / 2) / video.videoWidth) * 16 - 8;
-              const posY =
-                -((originY + height / 2) / video.videoHeight) * 12 + 6;
-              const posZ = -(width / video.videoWidth) * 10;
+            if (isRecording) {
+              // حل مشکل تخت بودن: تبدیل مختصات به فضای سه بعدی با عمق داینامیک
+              // X و Y را از مرکز صفحه محاسبه می‌کنیم (-1 تا 1)
+              const nx = ((originX + width / 2) / video.videoWidth) * 2 - 1;
+              const ny = -(
+                ((originY + height / 2) / video.videoHeight) * 2 -
+                1
+              );
 
-              update3DLine(i, posX, posY, posZ);
+              // تخمین Z: هر چه لیوان کوچک‌تر باشد، یعنی دورتر است.
+              // از نسبت عرض لیوان به عرض تصویر استفاده می‌کنیم.
+              const nz = -((video.videoWidth / width) * 0.5);
+
+              // تبدیل نقاط نرمالایز شده به مختصات جهانی Three.js
+              const vector = new THREE.Vector3(nx, ny, 0.5);
+              vector.unproject(camera);
+              const dir = vector.sub(camera.position).normalize();
+              const distance = Math.abs(nz);
+              const pos = camera.position
+                .clone()
+                .add(dir.multiplyScalar(distance));
+
+              update3DLine(i, pos.x, pos.y, pos.z);
             }
           }
         });
@@ -279,18 +334,16 @@
           const geometry = new THREE.BufferGeometry();
           const material = new THREE.LineBasicMaterial({
             color: color,
-            linewidth: 4,
+            linewidth: 3,
           });
           const line = new THREE.Line(geometry, material);
-
           objectPaths[id] = { line, points: [], color };
           scene.add(line);
         }
 
         const path = objectPaths[id];
         path.points.push(new THREE.Vector3(x, y, z));
-        if (path.points.length > 150) path.points.shift();
-
+        if (path.points.length > 200) path.points.shift();
         path.line.geometry.setFromPoints(path.points);
       }
 
