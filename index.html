@@ -3,44 +3,96 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AR Bicycle Path Tracker</title>
+    <title>AR Path Tracker</title>
     <style>
       body {
         margin: 0;
         overflow: hidden;
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-          Arial, sans-serif;
+        background-color: #000;
+        font-family: sans-serif;
       }
+
+      /* نمایش دوربین بدون زوم */
       video {
         position: absolute;
         width: 100vw;
         height: 100vh;
-        object-fit: cover;
+        object-fit: contain;
+        background: #000;
       }
       canvas {
         position: absolute;
         width: 100vw;
         height: 100vh;
-        object-fit: cover;
+        object-fit: contain;
+        pointer-events: none;
       }
+
+      /* صفحه توضیحات اولیه */
+      #overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        text-align: center;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+      #overlay h2 {
+        font-weight: 300;
+        letter-spacing: 2px;
+      }
+      #overlay p {
+        color: #888;
+        max-width: 300px;
+        line-height: 1.6;
+        font-size: 0.9em;
+      }
+      #start-btn {
+        margin-top: 30px;
+        padding: 12px 40px;
+        background: transparent;
+        color: #fff;
+        border: 1px solid #fff;
+        cursor: pointer;
+        letter-spacing: 1px;
+      }
+
+      /* متن راهنما در پایین صفحه */
       #status {
         position: absolute;
-        top: 20px;
-        left: 20px;
-        background: rgba(0, 0, 0, 0.8);
-        color: #00ff00;
-        padding: 12px 20px;
-        border-radius: 8px;
+        bottom: 40px;
+        width: 100%;
+        text-align: center;
+        color: #fff;
         z-index: 10;
-        font-size: 14px;
-        letter-spacing: 0.5px;
-        border-left: 4px solid #00ff00;
+        font-size: 13px;
+        font-weight: 300;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        opacity: 0.8;
       }
     </style>
   </head>
   <body>
-    <div id="status">Initializing AI Engine...</div>
+    <div id="overlay">
+      <h2>AR TRACKER</h2>
+      <p>
+        Please grant camera access. Point your device at a cup to track its path
+        in real-time.
+      </p>
+      <button id="start-btn">START EXPERIENCE</button>
+    </div>
+
+    <div id="status"></div>
     <video id="webcam" autoplay playsinline></video>
     <canvas id="output_canvas"></canvas>
 
@@ -58,9 +110,16 @@
       const canvas = document.getElementById("output_canvas");
       const ctx = canvas.getContext("2d");
       const statusDiv = document.getElementById("status");
+      const overlay = document.getElementById("overlay");
+      const startBtn = document.getElementById("start-btn");
 
       let objectDetector;
-      let bicyclePath = [];
+      let objectPath = [];
+
+      startBtn.addEventListener("click", () => {
+        overlay.style.display = "none";
+        initializeDetector();
+      });
 
       async function initializeDetector() {
         try {
@@ -75,35 +134,26 @@
             scoreThreshold: 0.4,
             runningMode: "VIDEO",
           });
-          statusDiv.innerText = "System Ready. Point camera at a bicycle.";
           startCamera();
         } catch (error) {
-          statusDiv.innerText = "Error loading models. Check your connection.";
-          console.error(error);
+          statusDiv.innerText = "CONNECTION ERROR";
         }
       }
 
       async function startCamera() {
         try {
-          const constraints = {
-            video: {
-              facingMode: "environment",
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
-          };
+          const constraints = { video: { facingMode: "environment" } };
           const stream = await navigator.mediaDevices.getUserMedia(constraints);
           video.srcObject = stream;
           video.addEventListener("loadeddata", predictWebcam);
         } catch (err) {
-          statusDiv.innerText = "Camera access denied.";
+          statusDiv.innerText = "CAMERA ACCESS DENIED";
         }
       }
 
       async function predictWebcam() {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-
         const startTimeMs = performance.now();
         if (objectDetector) {
           const detections = await objectDetector.detectForVideo(
@@ -117,47 +167,37 @@
 
       function renderDetections(result) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        let detectedBicycle = false;
+        let detected = false;
 
         result.detections.forEach((detection) => {
           const label = detection.categories[0].categoryName;
 
-          if (label === "bicycle") {
-            detectedBicycle = true;
+          // تغییر موقت به Cup برای تست
+          if (label === "cup") {
+            detected = true;
             const { originX, originY, width, height } = detection.boundingBox;
-
             const posX = originX + width / 2;
             const posY = originY + height;
-
-            bicyclePath.push({ x: posX, y: posY });
-            if (bicyclePath.length > 150) bicyclePath.shift();
+            objectPath.push({ x: posX, y: posY });
+            if (objectPath.length > 150) objectPath.shift();
           }
         });
 
-        if (detectedBicycle) {
-          statusDiv.innerText = "Tracking Bicycle...";
-          statusDiv.style.color = "#00ff00";
-        }
+        statusDiv.innerText = detected ? "TRACKING OBJECT" : "";
 
-        if (bicyclePath.length > 2) {
+        if (objectPath.length > 2) {
           ctx.beginPath();
-          ctx.strokeStyle = "#00ff00";
-          ctx.lineWidth = 6;
+          ctx.strokeStyle = "#ffffff"; // خط سفید برای تم مینیمال
+          ctx.lineWidth = 3;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
-          ctx.shadowBlur = 15;
-          ctx.shadowColor = "#00ff00";
-
-          ctx.moveTo(bicyclePath[0].x, bicyclePath[0].y);
-          for (let i = 1; i < bicyclePath.length; i++) {
-            ctx.lineTo(bicyclePath[i].x, bicyclePath[i].y);
+          ctx.moveTo(objectPath[0].x, objectPath[0].y);
+          for (let i = 1; i < objectPath.length; i++) {
+            ctx.lineTo(objectPath[i].x, objectPath[i].y);
           }
           ctx.stroke();
         }
       }
-
-      initializeDetector();
     </script>
   </body>
 </html>
