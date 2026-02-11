@@ -5,140 +5,145 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Advanced AR Tracker</title>
+    <title>3D Spatial Cup Tracker</title>
     <style>
       :root {
-        --ui-white: rgba(255, 255, 255, 0.9);
-        --ui-bg: rgba(0, 0, 0, 0.85);
         --accent: #00ffcc;
+        --bg: #000;
       }
-
       body,
       html {
         margin: 0;
         padding: 0;
         width: 100%;
         height: 100%;
-        background: #000;
+        background: var(--bg);
         overflow: hidden;
-        font-family: sans-serif;
+        font-family: -apple-system, sans-serif;
       }
 
-      /* Container Setup */
-      .ar-container {
+      .app-container {
         position: relative;
         width: 100vw;
         height: 100vh;
-        display: flex;
-        justify-content: center;
       }
-      video,
+      video {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        z-index: 1;
+        transition: all 0.5s ease;
+      }
       canvas {
         position: absolute;
         width: 100%;
         height: 100%;
-        object-fit: contain;
+        z-index: 2;
+        pointer-events: none;
       }
 
-      /* Overlay Interface */
+      /* Overlay */
       #overlay {
         position: absolute;
         inset: 0;
-        background: #000;
+        background: var(--bg);
         z-index: 100;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        transition: opacity 0.6s ease;
-      }
-      #overlay h1 {
-        font-weight: 100;
-        font-size: 2.5rem;
-        letter-spacing: 8px;
         color: white;
-      }
-      .btn-main {
-        margin-top: 2rem;
-        padding: 1rem 2.5rem;
-        background: none;
-        border: 1px solid var(--ui-white);
-        color: white;
-        cursor: pointer;
-        letter-spacing: 2px;
-        font-size: 0.9rem;
-        transition: 0.3s;
-      }
-      .btn-main:hover {
-        background: white;
-        color: black;
+        text-align: center;
+        transition: opacity 0.8s;
       }
 
-      /* Controls Area */
-      .controls {
+      /* Controls */
+      .ui-panel {
         position: absolute;
-        bottom: 10%;
+        bottom: 8%;
         width: 100%;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 1rem;
+        gap: 20px;
         z-index: 10;
       }
-      #status {
-        color: var(--ui-white);
-        font-size: 0.7rem;
+      .btn-group {
+        display: flex;
+        gap: 15px;
+      }
+      .btn {
+        padding: 12px 28px;
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        color: white;
+        border-radius: 40px;
+        cursor: pointer;
+        backdrop-filter: blur(15px);
+        font-size: 11px;
         letter-spacing: 2px;
         text-transform: uppercase;
-      }
-      .btn-record {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        border: 2px solid white;
-        background: none;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .btn-record .inner {
-        width: 20px;
-        height: 20px;
-        background: red;
-        border-radius: 50%;
         transition: 0.3s;
       }
-      .btn-record.active .inner {
-        background: white;
-        border-radius: 2px;
+      .btn-rec.active {
+        background: #ff0055;
+        border-color: #ff0055;
+      }
+
+      #status {
+        color: white;
+        font-size: 10px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        opacity: 0.5;
+      }
+
+      /* Export State */
+      .export-active video {
+        opacity: 0.05;
+        filter: grayscale(1) contrast(1.5);
       }
     </style>
   </head>
   <body>
-    <div class="ar-container">
+    <div class="app-container" id="main-app">
       <div id="overlay">
-        <h1>SPATIAL AR</h1>
-        <p style="color: #666; font-weight: 300">
-          Point at a cup to begin tracking
+        <h1 style="font-weight: 100; letter-spacing: 12px">SPATIAL AR</h1>
+        <p
+          style="
+            color: #555;
+            font-size: 12px;
+            max-width: 250px;
+            line-height: 1.8;
+          ">
+          Point at cups to generate 3D spatial paths. Each object is assigned a
+          unique color.
         </p>
-        <button class="btn-main" onclick="startApp()">INITIALIZE ENGINE</button>
+        <button
+          class="btn"
+          onclick="startExperience()"
+          style="margin-top: 30px; border-color: var(--accent)">
+          Initialize
+        </button>
+      </div>
+
+      <div class="ui-panel">
+        <div id="status">System Standby</div>
+        <div class="btn-group">
+          <button id="recBtn" class="btn btn-rec" onclick="toggleTracking()">
+            Rec Off
+          </button>
+          <button class="btn" onclick="toggleExport()">Export View</button>
+        </div>
       </div>
 
       <video id="webcam" autoplay playsinline></video>
-      <canvas id="output_canvas"></canvas>
-
-      <div class="controls">
-        <div id="status">Engine Ready</div>
-        <button id="record-btn" class="btn-record" onclick="toggleTracking()">
-          <div class="inner"></div>
-        </button>
-      </div>
+      <canvas id="2d-canvas"></canvas>
     </div>
 
-    <script
-      src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"
-      crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"></script>
 
     <script type="module">
       import {
@@ -146,109 +151,154 @@
         FilesetResolver,
       } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js";
 
-      const video = document.getElementById("webcam");
-      const canvas = document.getElementById("output_canvas");
-      const ctx = canvas.getContext("2d");
-      const recordBtn = document.getElementById("record-btn");
-      const statusDiv = document.getElementById("status");
+      let scene, camera, renderer, detector;
+      let video = document.getElementById("webcam");
+      let canvas2d = document.getElementById("2d-canvas");
+      let ctx2d = canvas2d.getContext("2d");
 
-      let objectDetector;
       let isTracking = false;
-      let pathData = []; // Stores {x, y, size}
+      let objectPaths = {};
+      const pathColors = [
+        0x00ffcc, 0xff0055, 0x0077ff, 0xffaa00, 0xcc00ff, 0x00ff00,
+      ];
 
-      window.startApp = async () => {
+      window.startExperience = async () => {
         document.getElementById("overlay").style.opacity = "0";
         setTimeout(
           () => (document.getElementById("overlay").style.display = "none"),
-          600,
+          800,
         );
 
+        initThree();
+        await initDetector();
+        setupCamera();
+      };
+
+      function initThree() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(
+          75,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          1000,
+        );
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document
+          .querySelector(".app-container")
+          .appendChild(renderer.domElement);
+        renderer.domElement.style.position = "absolute";
+        renderer.domElement.style.top = "0";
+        renderer.domElement.style.zIndex = "3";
+
+        camera.position.z = 8;
+      }
+
+      async function initDetector() {
         const vision = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm",
         );
-        objectDetector = await ObjectDetector.createFromOptions(vision, {
+        detector = await ObjectDetector.createFromOptions(vision, {
           baseOptions: {
             modelAssetPath: `https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite`,
             delegate: "GPU",
           },
-          scoreThreshold: 0.4,
+          scoreThreshold: 0.35,
           runningMode: "VIDEO",
         });
-        startCamera();
-      };
+        document.getElementById("status").innerText = "AI Engine Active";
+      }
 
-      window.toggleTracking = () => {
-        isTracking = !isTracking;
-        recordBtn.classList.toggle("active");
-        statusDiv.innerText = isTracking ? "Recording Path..." : "Paused";
-        if (!isTracking) pathData = []; // Optional: Clear path on stop
-      };
-
-      async function startCamera() {
+      async function setupCamera() {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
         });
         video.srcObject = stream;
         video.onloadedmetadata = () => {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          predictWebcam();
+          canvas2d.width = video.videoWidth;
+          canvas2d.height = video.videoHeight;
+          renderLoop();
         };
       }
 
-      function predictWebcam() {
-        if (objectDetector && video.readyState >= 2) {
-          const detections = objectDetector.detectForVideo(
-            video,
-            performance.now(),
-          );
-          drawScene(detections);
+      window.toggleTracking = () => {
+        isTracking = !isTracking;
+        const btn = document.getElementById("recBtn");
+        btn.classList.toggle("active");
+        btn.innerText = isTracking ? "Rec On" : "Rec Off";
+        if (!isTracking) {
+          // Clear scene for new recording session
+          Object.values(objectPaths).forEach((p) => scene.remove(p.line));
+          objectPaths = {};
         }
-        window.requestAnimationFrame(predictWebcam);
+      };
+
+      window.toggleExport = () => {
+        document.body.classList.toggle("export-active");
+      };
+
+      function renderLoop() {
+        ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+
+        if (detector && video.readyState >= 2) {
+          const results = detector.detectForVideo(video, performance.now());
+          handleDetections(results);
+        }
+
+        renderer.render(scene, camera);
+        requestAnimationFrame(renderLoop);
       }
 
-      function drawScene(result) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      function handleDetections(results) {
+        results.detections.forEach((det, i) => {
+          if (det.categories[0].categoryName === "cup") {
+            const { originX, originY, width, height } = det.boundingBox;
 
-        result.detections.forEach((detection) => {
-          const { originX, originY, width, height } = detection.boundingBox;
-          const label = detection.categories[0].categoryName;
+            // 1. Draw Bounding Box (2D Overlay)
+            ctx2d.strokeStyle = "rgba(255, 255, 255, 0.5)";
+            ctx2d.lineWidth = 2;
+            ctx2d.strokeRect(originX, originY, width, height);
 
-          // 1. Draw Bounding Box (Live detection)
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-          ctx.lineWidth = 1;
-          ctx.strokeRect(originX, originY, width, height);
+            // 2. Process 3D Path if recording
+            if (isTracking) {
+              const posX = ((originX + width / 2) / video.videoWidth) * 16 - 8;
+              const posY =
+                -((originY + height / 2) / video.videoHeight) * 12 + 6;
+              const posZ = -(width / video.videoWidth) * 10;
 
-          // 2. Add to Path if tracking is ON
-          if (isTracking && label === "cup") {
-            const centerX = originX + width / 2;
-            const centerY = originY + height;
-            // Store position + size (size is used as a depth proxy)
-            pathData.push({ x: centerX, y: centerY, size: width });
-            if (pathData.length > 200) pathData.shift();
+              update3DLine(i, posX, posY, posZ);
+            }
           }
         });
-
-        // 3. Draw Spatial Path
-        if (pathData.length > 2) {
-          for (let i = 1; i < pathData.length; i++) {
-            const p1 = pathData[i - 1];
-            const p2 = pathData[i];
-
-            // DEPTH EFFECT: Thickness changes based on the object's width
-            const thickness = Math.max(1, p2.size / 30);
-            const opacity = Math.min(1, p2.size / 100);
-
-            ctx.beginPath();
-            ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
-            ctx.lineWidth = thickness;
-            ctx.lineCap = "round";
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.stroke();
-          }
-        }
       }
+
+      function update3DLine(id, x, y, z) {
+        if (!objectPaths[id]) {
+          const color = pathColors[id % pathColors.length];
+          const geometry = new THREE.BufferGeometry();
+          const material = new THREE.LineBasicMaterial({
+            color: color,
+            linewidth: 4,
+          });
+          const line = new THREE.Line(geometry, material);
+
+          objectPaths[id] = { line, points: [], color };
+          scene.add(line);
+        }
+
+        const path = objectPaths[id];
+        path.points.push(new THREE.Vector3(x, y, z));
+        if (path.points.length > 150) path.points.shift();
+
+        path.line.geometry.setFromPoints(path.points);
+      }
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
     </script>
   </body>
 </html>
