@@ -5,7 +5,7 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>3D Spatial AI Painter - Solid Paths</title>
+    <title>3D World Tracking Painter</title>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
@@ -22,7 +22,7 @@
         height: 100%;
         background: var(--bg);
         overflow: hidden;
-        font-family: -apple-system, sans-serif;
+        font-family: sans-serif;
       }
       .app-container {
         position: relative;
@@ -36,11 +36,13 @@
         object-fit: cover;
         z-index: 1;
       }
-      canvas#twod-canvas {
+      canvas {
         position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
-        z-index: 2;
+        z-index: 3;
         pointer-events: none;
       }
       #overlay {
@@ -55,115 +57,27 @@
         color: white;
         text-align: center;
         padding: 20px;
-        transition: 0.8s;
-      }
-      .top-nav {
-        position: absolute;
-        top: 25px;
-        width: 100%;
-        display: none;
-        justify-content: center;
-        z-index: 10;
-      }
-      .selector-box {
-        background: rgba(0, 0, 0, 0.6);
-        backdrop-filter: blur(15px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 30px;
-        padding: 4px;
-        display: flex;
-        gap: 5px;
-      }
-      .sel-btn {
-        background: none;
-        border: none;
-        color: white;
-        padding: 8px 16px;
-        border-radius: 20px;
-        font-size: 11px;
-        cursor: pointer;
-        text-transform: uppercase;
-        opacity: 0.5;
-      }
-      .sel-btn.active {
-        background: var(--accent);
-        color: black;
-        opacity: 1;
-        font-weight: bold;
-      }
-      .ui-panel {
-        position: absolute;
-        bottom: 8%;
-        width: 100%;
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        gap: 20px;
-        z-index: 10;
-      }
-      .btn-group {
-        display: flex;
-        gap: 15px;
       }
       .btn {
-        width: 55px;
-        height: 55px;
-        background: rgba(0, 0, 0, 0.5);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        color: white;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-      }
-      .recording {
-        border-color: #ff0055;
-        color: #ff0055;
-        box-shadow: 0 0 15px rgba(255, 0, 85, 0.3);
+        padding: 15px 40px;
+        border-radius: 30px;
+        border: 1px solid var(--accent);
+        background: none;
+        color: var(--accent);
+        cursor: pointer;
+        font-size: 16px;
+        margin-top: 20px;
       }
     </style>
   </head>
   <body>
     <div class="app-container">
       <div id="overlay">
-        <h1 style="font-weight: 100; letter-spacing: 12px">SPATIAL AR</h1>
-        <p style="color: #888; font-size: 14px">
-          Move your object to leave a 3D trail in space.
-        </p>
-        <button
-          class="btn"
-          style="width: auto; padding: 0 30px; border-radius: 30px"
-          onclick="startExperience()">
-          INITIALIZE
-        </button>
+        <h1 style="font-weight: 100; letter-spacing: 10px">WORLD AR</h1>
+        <p>Track objects and walk around them in 3D space.</p>
+        <button class="btn" onclick="requestPermissions()">START ENGINE</button>
       </div>
-
-      <div class="top-nav" id="top-nav">
-        <div class="selector-box">
-          <button class="sel-btn active" onclick="setTarget('cup', this)">
-            Cup
-          </button>
-          <button class="sel-btn" onclick="setTarget('person', this)">
-            Person
-          </button>
-          <button class="sel-btn" onclick="setTarget('car', this)">Car</button>
-        </div>
-      </div>
-
-      <div class="ui-panel" id="ui-panel">
-        <div class="btn-group">
-          <button class="btn" onclick="resetPaths()">
-            <i class="fas fa-undo"></i>
-          </button>
-          <button id="trackBtn" class="btn" onclick="toggleTracking()">
-            <i class="fas fa-play"></i>
-          </button>
-        </div>
-      </div>
-
       <video id="webcam" autoplay playsinline></video>
-      <canvas id="twod-canvas"></canvas>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -177,26 +91,35 @@
 
       let scene, camera, renderer, detector, testCube;
       let video = document.getElementById("webcam");
-      let canvas2d = document.getElementById("twod-canvas");
-      let ctx2d = canvas2d.getContext("2d");
-
-      let isRecording = false;
       let currentTarget = "cup";
-      let objectPaths = {};
-      const pathColors = [0x00ffcc, 0xff0055, 0x0077ff, 0xffaa00];
+      let isRecording = false;
 
-      window.startExperience = async () => {
-        document.getElementById("overlay").style.opacity = "0";
-        setTimeout(() => {
-          document.getElementById("overlay").style.display = "none";
-          document.getElementById("top-nav").style.display = "flex";
-          document.getElementById("ui-panel").style.display = "flex";
-        }, 800);
+      // درخواست اجازه دسترسی به سنسورهای حرکتی (مخصوص آیفون)
+      window.requestPermissions = async () => {
+        if (
+          typeof DeviceOrientationEvent !== "undefined" &&
+          typeof DeviceOrientationEvent.requestPermission === "function"
+        ) {
+          try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === "granted") {
+              startExperience();
+            }
+          } catch (e) {
+            alert("Permission denied");
+          }
+        } else {
+          startExperience(); // برای اندروید یا دسکتاپ
+        }
+      };
 
+      async function startExperience() {
+        document.getElementById("overlay").style.display = "none";
         initThree();
         await initDetector();
         setupCamera();
-      };
+        setupWorldTracking(); // فعال‌سازی سنسورهای حرکتی
+      }
 
       function initThree() {
         scene = new THREE.Scene();
@@ -206,26 +129,36 @@
           0.1,
           1000,
         );
+
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         document
           .querySelector(".app-container")
           .appendChild(renderer.domElement);
-        renderer.domElement.style.position = "absolute";
-        renderer.domElement.style.top = "0";
-        renderer.domElement.style.zIndex = "3";
 
-        // مکعب توپر برای تست موقعیت
-        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        // مکعب تست که در محیط ثابت می‌ماند
+        const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
         const material = new THREE.MeshNormalMaterial({
           transparent: true,
-          opacity: 0.7,
+          opacity: 0.8,
         });
         testCube = new THREE.Mesh(geometry, material);
         scene.add(testCube);
 
-        camera.position.set(0, 0, 5); // کمی عقب‌تر برای دید بهتر به محیط
+        camera.position.set(0, 0, 0);
+      }
+
+      // بخش جدید: چرخاندن دوربین همگام با چرخش گوشی (World Tracking پایه)
+      function setupWorldTracking() {
+        window.addEventListener("deviceorientation", (event) => {
+          const alpha = event.alpha ? THREE.MathUtils.degToRad(event.alpha) : 0; // چرخش حول محور Z
+          const beta = event.beta ? THREE.MathUtils.degToRad(event.beta) : 0; // چرخش حول محور X
+          const gamma = event.gamma ? THREE.MathUtils.degToRad(event.gamma) : 0; // چرخش حول محور Y
+
+          // تنظیم جهت دوربین بر اساس سنسور ژیروسکوپ
+          camera.rotation.set(beta, alpha, -gamma, "YXZ");
+        });
       }
 
       async function initDetector() {
@@ -247,93 +180,56 @@
           video: { facingMode: "environment" },
         });
         video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          canvas2d.width = video.videoWidth;
-          canvas2d.height = video.videoHeight;
-          renderLoop();
-        };
+        video.onloadedmetadata = renderLoop;
       }
 
-      window.setTarget = (label, btn) => {
-        currentTarget = label;
-        document
-          .querySelectorAll(".sel-btn")
-          .forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-      };
-
-      window.toggleTracking = () => {
-        isRecording = !isRecording;
-        document
-          .getElementById("trackBtn")
-          .classList.toggle("recording", isRecording);
-      };
-
-      window.resetPaths = () => {
-        Object.values(objectPaths).forEach((p) => scene.remove(p.mesh));
-        objectPaths = {};
-      };
-
       function renderLoop() {
-        ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
         if (detector && video.readyState >= 2) {
           const results = detector.detectForVideo(video, performance.now());
-          handleDetections(results);
+
+          results.detections.forEach((det) => {
+            if (det.categories[0].categoryName === currentTarget) {
+              const { originX, originY, width } = det.boundingBox;
+
+              // تبدیل مختصات تصویر به مختصات جهانی (World Space)
+              const nx = ((originX + width / 2) / video.videoWidth) * 2 - 1;
+              const ny = -(
+                ((originY +
+                  det.boundingBox.originY +
+                  det.boundingBox.height / 2) /
+                  video.videoHeight) *
+                  2 -
+                1
+              );
+              const dist = (video.videoWidth / width) * 0.5;
+
+              // قرار دادن آبجکت در نقطه‌ای که دوربین به آن نگاه می‌کند
+              const vector = new THREE.Vector3(nx, ny, -1);
+              vector.unproject(camera);
+              const dir = vector.sub(camera.position).normalize();
+              const targetPos = camera.position
+                .clone()
+                .add(dir.multiplyScalar(dist));
+
+              testCube.position.copy(targetPos);
+
+              // رسم مسیر (همیشه در فضا باقی می‌ماند)
+              if (true) {
+                // در این نسخه همیشه رسم می‌کند برای تست
+                const trailGeom = new THREE.SphereGeometry(0.05, 8, 8);
+                const trailMat = new THREE.MeshBasicMaterial({
+                  color: 0x00ffcc,
+                });
+                const dot = new THREE.Mesh(trailGeom, trailMat);
+                dot.position.copy(targetPos);
+                scene.add(dot);
+              }
+            }
+          });
         }
         renderer.render(scene, camera);
         requestAnimationFrame(renderLoop);
       }
-
-      function handleDetections(results) {
-        testCube.visible = false;
-        results.detections.forEach((det, i) => {
-          if (det.categories[0].categoryName === currentTarget) {
-            const { originX, originY, width, height } = det.boundingBox;
-
-            // تبدیل مختصات ۲ بعدی به فضای ۳ بعدی (با استفاده از تخمین عمق)
-            const nx = ((originX + width / 2) / video.videoWidth) * 2 - 1;
-            const ny = -(((originY + height / 2) / video.videoHeight) * 2 - 1);
-            const nz = 5 - (video.videoWidth / width) * 1.2; // محاسبه عمق بر اساس فاصله از دوربین (Z=5)
-
-            // قرار دادن مکعب تست
-            testCube.visible = true;
-            testCube.position.set(nx * 5, ny * 5, nz);
-            testCube.scale.set(width / 200, width / 200, width / 200);
-
-            if (isRecording) {
-              spawnTrailSphere(
-                i,
-                testCube.position.x,
-                testCube.position.y,
-                testCube.position.z,
-              );
-            }
-          }
-        });
-      }
-
-      // ایجاد دنباله‌ای از کره‌ها که در فضا باقی می‌مانند
-      function spawnTrailSphere(id, x, y, z) {
-        const sphereGeom = new THREE.SphereGeometry(0.1, 8, 8);
-        const sphereMat = new THREE.MeshBasicMaterial({
-          color: pathColors[id % pathColors.length],
-        });
-        const sphere = new THREE.Mesh(sphereGeom, sphereMat);
-
-        sphere.position.set(x, y, z);
-        scene.add(sphere);
-
-        // ذخیره برای مدیریت (مثلاً پاک کردن)
-        if (!objectPaths[id]) objectPaths[id] = { mesh: new THREE.Group() };
-        objectPaths[id].mesh.add(sphere);
-        scene.add(objectPaths[id].mesh);
-      }
-
-      window.addEventListener("resize", () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
     </script>
   </body>
 </html>
