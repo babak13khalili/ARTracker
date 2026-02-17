@@ -5,7 +5,7 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>3D Spatial AI Painter + Object Test</title>
+    <title>3D Spatial AI Painter - Solid Paths</title>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
@@ -24,7 +24,6 @@
         overflow: hidden;
         font-family: -apple-system, sans-serif;
       }
-
       .app-container {
         position: relative;
         width: 100vw;
@@ -36,7 +35,6 @@
         height: 100%;
         object-fit: cover;
         z-index: 1;
-        transition: all 0.5s ease;
       }
       canvas#twod-canvas {
         position: absolute;
@@ -45,8 +43,6 @@
         z-index: 2;
         pointer-events: none;
       }
-
-      /* Home Page / Overlay */
       #overlay {
         position: absolute;
         inset: 0;
@@ -58,11 +54,9 @@
         justify-content: center;
         color: white;
         text-align: center;
-        transition: opacity 0.8s;
         padding: 20px;
+        transition: 0.8s;
       }
-
-      /* Top Selector */
       .top-nav {
         position: absolute;
         top: 25px;
@@ -89,9 +83,7 @@
         font-size: 11px;
         cursor: pointer;
         text-transform: uppercase;
-        letter-spacing: 1px;
         opacity: 0.5;
-        transition: 0.3s;
       }
       .sel-btn.active {
         background: var(--accent);
@@ -99,8 +91,6 @@
         opacity: 1;
         font-weight: bold;
       }
-
-      /* Bottom Controls */
       .ui-panel {
         position: absolute;
         bottom: 8%;
@@ -114,9 +104,7 @@
       .btn-group {
         display: flex;
         gap: 15px;
-        align-items: center;
       }
-
       .btn {
         width: 55px;
         height: 55px;
@@ -124,57 +112,30 @@
         border: 1px solid rgba(255, 255, 255, 0.4);
         color: white;
         border-radius: 50%;
-        cursor: pointer;
-        backdrop-filter: blur(15px);
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 18px;
-        transition: 0.3s;
       }
-      .btn:active {
-        transform: scale(0.9);
-      }
-      .btn-main {
-        width: auto;
-        height: auto;
-        padding: 12px 30px;
-        border-radius: 40px;
-        font-size: 12px;
-        letter-spacing: 2px;
-      }
-
       .recording {
         border-color: #ff0055;
         color: #ff0055;
         box-shadow: 0 0 15px rgba(255, 0, 85, 0.3);
       }
-      .export-active video {
-        opacity: 0.05;
-        filter: grayscale(1) brightness(0.5);
-      }
     </style>
   </head>
   <body>
-    <div class="app-container" id="main-app">
+    <div class="app-container">
       <div id="overlay">
         <h1 style="font-weight: 100; letter-spacing: 12px">SPATIAL AR</h1>
-        <p
-          style="
-            color: #888;
-            font-size: 14px;
-            max-width: 300px;
-            line-height: 1.8;
-            font-family: sans-serif;
-          ">
-          Initialize the engine to track objects in 3D space. Select a target
-          and move it to paint.
+        <p style="color: #888; font-size: 14px">
+          Move your object to leave a 3D trail in space.
         </p>
         <button
-          class="btn btn-main"
-          onclick="startExperience()"
-          style="margin-top: 30px; border-color: var(--accent)">
-          INITIALIZE ENGINE
+          class="btn"
+          style="width: auto; padding: 0 30px; border-radius: 30px"
+          onclick="startExperience()">
+          INITIALIZE
         </button>
       </div>
 
@@ -187,9 +148,6 @@
             Person
           </button>
           <button class="sel-btn" onclick="setTarget('car', this)">Car</button>
-          <button class="sel-btn" onclick="setTarget('bicycle', this)">
-            Bike
-          </button>
         </div>
       </div>
 
@@ -200,9 +158,6 @@
           </button>
           <button id="trackBtn" class="btn" onclick="toggleTracking()">
             <i class="fas fa-play"></i>
-          </button>
-          <button id="exportBtn" class="btn" onclick="toggleExport()">
-            <i class="far fa-circle"></i>
           </button>
         </div>
       </div>
@@ -226,12 +181,9 @@
       let ctx2d = canvas2d.getContext("2d");
 
       let isRecording = false;
-      let isExport = false;
       let currentTarget = "cup";
       let objectPaths = {};
-      const pathColors = [
-        0x00ffcc, 0xff0055, 0x0077ff, 0xffaa00, 0xcc00ff, 0x00ff00,
-      ];
+      const pathColors = [0x00ffcc, 0xff0055, 0x0077ff, 0xffaa00];
 
       window.startExperience = async () => {
         document.getElementById("overlay").style.opacity = "0";
@@ -256,7 +208,7 @@
         );
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(window.devicePixelRatio);
         document
           .querySelector(".app-container")
           .appendChild(renderer.domElement);
@@ -264,18 +216,16 @@
         renderer.domElement.style.top = "0";
         renderer.domElement.style.zIndex = "3";
 
-        // ساخت مکعب تست برای نمایش موقعیت لحظه‌ای
+        // مکعب توپر برای تست موقعیت
         const geometry = new THREE.BoxGeometry(1, 1, 1);
-        const material = new THREE.MeshBasicMaterial({
-          color: 0x00ffcc,
-          wireframe: true,
+        const material = new THREE.MeshNormalMaterial({
           transparent: true,
-          opacity: 0.6,
+          opacity: 0.7,
         });
         testCube = new THREE.Mesh(geometry, material);
         scene.add(testCube);
 
-        camera.position.set(0, 0, 0);
+        camera.position.set(0, 0, 5); // کمی عقب‌تر برای دید بهتر به محیط
       }
 
       async function initDetector() {
@@ -310,100 +260,73 @@
           .querySelectorAll(".sel-btn")
           .forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
-        resetPaths();
       };
 
       window.toggleTracking = () => {
         isRecording = !isRecording;
-        const btn = document.getElementById("trackBtn");
-        btn.innerHTML = isRecording
-          ? '<i class="fas fa-pause"></i>'
-          : '<i class="fas fa-play"></i>';
-        btn.classList.toggle("recording", isRecording);
+        document
+          .getElementById("trackBtn")
+          .classList.toggle("recording", isRecording);
       };
 
       window.resetPaths = () => {
-        Object.values(objectPaths).forEach((p) => scene.remove(p.line));
+        Object.values(objectPaths).forEach((p) => scene.remove(p.mesh));
         objectPaths = {};
-      };
-
-      window.toggleExport = () => {
-        isExport = !isExport;
-        document.body.classList.toggle("export-active");
-        const btn = document.getElementById("exportBtn");
-        btn.innerHTML = isExport
-          ? '<i class="fas fa-circle"></i>'
-          : '<i class="far fa-circle"></i>';
       };
 
       function renderLoop() {
         ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
-
         if (detector && video.readyState >= 2) {
           const results = detector.detectForVideo(video, performance.now());
           handleDetections(results);
         }
-
         renderer.render(scene, camera);
         requestAnimationFrame(renderLoop);
       }
 
       function handleDetections(results) {
-        // پنهان کردن مکعب اگر چیزی پیدا نشد
         testCube.visible = false;
-
         results.detections.forEach((det, i) => {
           if (det.categories[0].categoryName === currentTarget) {
             const { originX, originY, width, height } = det.boundingBox;
 
-            // رسم کادر نازک در لایه 2D
-            ctx2d.strokeStyle = "rgba(255, 255, 255, 0.2)";
-            ctx2d.strokeRect(originX, originY, width, height);
-
-            // محاسبات مختصات سه‌بعدی
+            // تبدیل مختصات ۲ بعدی به فضای ۳ بعدی (با استفاده از تخمین عمق)
             const nx = ((originX + width / 2) / video.videoWidth) * 2 - 1;
             const ny = -(((originY + height / 2) / video.videoHeight) * 2 - 1);
-            const nz = -((video.videoWidth / width) * 0.5);
+            const nz = 5 - (video.videoWidth / width) * 1.2; // محاسبه عمق بر اساس فاصله از دوربین (Z=5)
 
-            const vector = new THREE.Vector3(nx, ny, 0.5);
-            vector.unproject(camera);
-            const dir = vector.sub(camera.position).normalize();
-            const distance = Math.abs(nz);
-            const pos = camera.position
-              .clone()
-              .add(dir.multiplyScalar(distance));
-
-            // آپدیت مکعب تست
+            // قرار دادن مکعب تست
             testCube.visible = true;
-            testCube.position.set(pos.x, pos.y, pos.z);
-            // تغییر مقیاس مکعب بر اساس اندازه واقعی سوژه در تصویر
-            const s = width / 150;
-            testCube.scale.set(s, s, s);
+            testCube.position.set(nx * 5, ny * 5, nz);
+            testCube.scale.set(width / 200, width / 200, width / 200);
 
             if (isRecording) {
-              update3DLine(i, pos.x, pos.y, pos.z);
+              spawnTrailSphere(
+                i,
+                testCube.position.x,
+                testCube.position.y,
+                testCube.position.z,
+              );
             }
           }
         });
       }
 
-      function update3DLine(id, x, y, z) {
-        if (!objectPaths[id]) {
-          const color = pathColors[id % pathColors.length];
-          const geometry = new THREE.BufferGeometry();
-          const material = new THREE.LineBasicMaterial({
-            color: color,
-            linewidth: 3,
-          });
-          const line = new THREE.Line(geometry, material);
-          objectPaths[id] = { line, points: [], color };
-          scene.add(line);
-        }
+      // ایجاد دنباله‌ای از کره‌ها که در فضا باقی می‌مانند
+      function spawnTrailSphere(id, x, y, z) {
+        const sphereGeom = new THREE.SphereGeometry(0.1, 8, 8);
+        const sphereMat = new THREE.MeshBasicMaterial({
+          color: pathColors[id % pathColors.length],
+        });
+        const sphere = new THREE.Mesh(sphereGeom, sphereMat);
 
-        const path = objectPaths[id];
-        path.points.push(new THREE.Vector3(x, y, z));
-        if (path.points.length > 200) path.points.shift();
-        path.line.geometry.setFromPoints(path.points);
+        sphere.position.set(x, y, z);
+        scene.add(sphere);
+
+        // ذخیره برای مدیریت (مثلاً پاک کردن)
+        if (!objectPaths[id]) objectPaths[id] = { mesh: new THREE.Group() };
+        objectPaths[id].mesh.add(sphere);
+        scene.add(objectPaths[id].mesh);
       }
 
       window.addEventListener("resize", () => {
